@@ -11,6 +11,7 @@
     <Version>1.0.0</Version>
     <Copyright>Copyright © HMBSbige 2020</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>HMBSbige.SingleInstance</PackageId>
   </PropertyGroup>
 
   <ItemGroup>
