@@ -12,6 +12,7 @@
     <Copyright>Copyright © HMBSbige 2020</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>HMBSbige.SingleInstance</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
