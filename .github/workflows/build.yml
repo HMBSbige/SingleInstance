@@ -23,5 +23,6 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       shell: pwsh
       run: |
-        dotnet nuget push ${{ env.ProjectName }}\bin\Release\*.nupkg -s https://nuget.pkg.github.com/HMBSbige/index.json -k -p ${{ secrets.NUGET_TOKEN }} --skip-duplicate
+        dotnet nuget add source https://nuget.pkg.github.com/HMBSbige/index.json -n GitHub-HMBSbige -u HMBSbige -p ${{ secrets.NUGET_TOKEN }}
+        dotnet nuget push ${{ env.ProjectName }}\bin\Release\*.nupkg -s GitHub-HMBSbige --skip-duplicate
         dotnet nuget push ${{ env.ProjectName }}\bin\Release\*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NuGetAPIKey }} --skip-duplicate
