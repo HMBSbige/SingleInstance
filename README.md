@@ -11,7 +11,7 @@ var singleInstance = new SingleInstance(@"Global");
 
 if (!singleInstance.IsFirstInstance)
 {
-    singleInstance.PassArgumentsToFirstInstance(e.Args.Append(Constants.ParameterShow));
+    singleInstance.PassArgumentsToFirstInstance(e.Args);
     return;
 }
 
