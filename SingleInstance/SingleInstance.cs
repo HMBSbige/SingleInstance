@@ -122,24 +122,45 @@ namespace SingleInstance
 		}
 
 		#region IDisposable
-		private volatile bool _disposed;
 
-		public void Dispose()
+		private volatile bool _disposedValue;
+
+		private void Dispose(bool disposing)
 		{
-			if (_disposed)
+			if (_disposedValue)
 			{
 				return;
 			}
-			_disposed = true;
 
-			if (_mutex != null && _ownsMutex)
+			if (disposing)
 			{
-				_mutex.ReleaseMutex();
-				_mutex = null;
+				// 释放托管状态(托管对象)
+
+				if (_mutex != null && _ownsMutex)
+				{
+					_mutex.ReleaseMutex();
+					_mutex = null;
+				}
+
+				_argumentsReceived.OnCompleted();
 			}
 
-			_argumentsReceived.OnCompleted();
+			// 释放未托管的资源(未托管的对象)并替代终结器
+			// 将大型字段设置为 null
+			_disposedValue = true;
 		}
+
+		~SingleInstance()
+		{
+			Dispose(false);
+		}
+
+		public void Dispose()
+		{
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
 		#endregion
 	}
 }
