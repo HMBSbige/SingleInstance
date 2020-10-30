@@ -28,10 +28,18 @@ namespace UnitTest
 			var singleInstance = new SingleInstance.SingleInstance(identifier);
 			Assert.IsTrue(singleInstance.IsFirstInstance);
 
+			var singleInstance2 = new SingleInstance.SingleInstance(identifier);
+			Assert.IsFalse(singleInstance2.IsFirstInstance);
+
 			singleInstance.Dispose();
 
-			using var singleInstance2 = new SingleInstance.SingleInstance(identifier);
-			Assert.IsTrue(singleInstance2.IsFirstInstance);
+			singleInstance = new SingleInstance.SingleInstance(identifier);
+			Assert.IsTrue(singleInstance.IsFirstInstance);
+
+			singleInstance2.Dispose();
+
+			singleInstance2 = new SingleInstance.SingleInstance(identifier);
+			Assert.IsFalse(singleInstance2.IsFirstInstance);
 		}
 
 		[TestMethod]
@@ -40,7 +48,7 @@ namespace UnitTest
 			const string identifier = @"Global\SingleInstance.TestPassArgumentsAsync";
 			const string success = @"success";
 			const string fail = @"fail";
-			var result = false;
+			var tcs = new TaskCompletionSource<bool>();
 
 			using var singleInstance = new SingleInstance.SingleInstance(identifier);
 
@@ -48,17 +56,20 @@ namespace UnitTest
 			{
 				if (args.First() == success && args.Last() == fail)
 				{
-					result = true;
+					tcs.SetResult(true);
+				}
+				else
+				{
+					tcs.SetResult(false);
 				}
 			});
 			singleInstance.ListenForArgumentsFromSuccessiveInstances();
 
 			using var singleInstance2 = new SingleInstance.SingleInstance(identifier);
 
-			await singleInstance2.PassArgumentsToFirstInstanceAsync(new[] { success, fail });
-			await Task.Delay(TimeSpan.FromMilliseconds(200));
+			Assert.IsTrue(singleInstance2.PassArgumentsToFirstInstance(new[] { success, fail }));
 
-			Assert.IsTrue(result);
+			Assert.IsTrue(await tcs.Task);
 		}
 	}
 }

@@ -13,9 +13,11 @@ namespace SingleInstance
 	/// </summary>
 	public sealed class SingleInstance : IDisposable
 	{
-		private Mutex _mutex;
+		private readonly Mutex _mutex;
 		private readonly bool _ownsMutex;
 		private readonly string _identifier;
+		private volatile Task _server;
+		private readonly CancellationTokenSource _cts;
 
 		/// <summary>
 		/// Enforces single instance for an application.
@@ -24,7 +26,14 @@ namespace SingleInstance
 		public SingleInstance(string identifier)
 		{
 			_identifier = identifier;
+
 			_mutex = new Mutex(true, identifier, out _ownsMutex);
+			if (!_ownsMutex)
+			{
+				Dispose();
+			}
+
+			_cts = new CancellationTokenSource();
 		}
 
 		/// <summary>
@@ -46,9 +55,8 @@ namespace SingleInstance
 
 			try
 			{
-				using var client = new NamedPipeClientStream(_identifier);
+				using var client = new NamedPipeClientStream(@".", _identifier, PipeDirection.Out);
 				using var writer = new StreamWriter(client);
-
 				client.Connect(200);
 
 				foreach (var argument in arguments)
@@ -58,49 +66,10 @@ namespace SingleInstance
 
 				return true;
 			}
-			catch (TimeoutException)
+			catch
 			{
-				//Couldn't connect to server
+				return false;
 			}
-			catch (IOException)
-			{
-				//Pipe was broken
-			}
-
-			return false;
-		}
-
-		public async ValueTask<bool> PassArgumentsToFirstInstanceAsync(IEnumerable<string> arguments, CancellationToken token = default)
-		{
-			if (IsFirstInstance)
-			{
-				throw new InvalidOperationException(@"This is the first instance.");
-			}
-
-			try
-			{
-				using var client = new NamedPipeClientStream(_identifier);
-				using var writer = new StreamWriter(client);
-
-				await client.ConnectAsync(200, token);
-
-				foreach (var argument in arguments)
-				{
-					await writer.WriteLineAsync(argument);
-				}
-
-				return true;
-			}
-			catch (TimeoutException)
-			{
-				//Couldn't connect to server
-			}
-			catch (IOException)
-			{
-				//Pipe was broken
-			}
-
-			return false;
 		}
 
 		/// <summary>
@@ -113,51 +82,50 @@ namespace SingleInstance
 				throw new InvalidOperationException(@"This is not the first instance.");
 			}
 
-			ThreadPool.QueueUserWorkItem(ListenForArguments);
+			if (_server == null)
+			{
+				_server = ListenForArguments(_cts.Token);
+			}
 		}
 
 		/// <summary>
 		/// Listens for arguments on a named pipe.
 		/// </summary>
-		/// <param name="state">State object required by WaitCallback delegate.</param>
-		// ReSharper disable once FunctionRecursiveOnAllPaths
-		private void ListenForArguments(object state)
+		private async Task ListenForArguments(CancellationToken token)
 		{
-			try
+			while (!token.IsCancellationRequested)
 			{
-				using var server = new NamedPipeServerStream(_identifier);
-				using var reader = new StreamReader(server);
-				server.WaitForConnection();
-
-				var arguments = new List<string>();
-				while (server.IsConnected)
+				try
 				{
-					var str = reader.ReadLine();
-					if (str != null)
-					{
-						arguments.Add(str);
-					}
-				}
+					using var server = new NamedPipeServerStream(_identifier, PipeDirection.In);
+					using var reader = new StreamReader(server);
+					await server.WaitForConnectionAsync(token);
 
-				ThreadPool.QueueUserWorkItem(OnArgumentsReceived, arguments.ToArray());
-			}
-			catch (IOException)
-			{
-				//Pipe was broken
-			}
-			finally
-			{
-				ListenForArguments(null);
+					var arguments = new List<string>();
+					while (server.IsConnected)
+					{
+						var str = await reader.ReadLineAsync();
+						if (str != null)
+						{
+							arguments.Add(str);
+						}
+						else
+						{
+							break;
+						}
+					}
+
+					_argumentsReceived.OnNext(arguments.ToArray());
+				}
+				catch
+				{
+					// ignored
+				}
 			}
 		}
 
 		private readonly Subject<string[]> _argumentsReceived = new Subject<string[]>();
 		public IObservable<string[]> ArgumentsReceived => _argumentsReceived;
-
-		private void OnArgumentsReceived(object arguments)
-		{
-			_argumentsReceived.OnNext((string[])arguments);
-		}
 
 		#region IDisposable
 
@@ -174,12 +142,8 @@ namespace SingleInstance
 			{
 				// 释放托管状态(托管对象)
 
-				if (_mutex != null && _ownsMutex)
-				{
-					_mutex.Dispose();
-					_mutex = null;
-				}
-
+				_cts?.Cancel();
+				_mutex?.Dispose();
 				_argumentsReceived.OnCompleted();
 			}
 
