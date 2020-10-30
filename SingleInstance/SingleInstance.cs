@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Reactive.Subjects;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SingleInstance
 {
@@ -69,6 +70,39 @@ namespace SingleInstance
 			return false;
 		}
 
+		public async ValueTask<bool> PassArgumentsToFirstInstanceAsync(IEnumerable<string> arguments, CancellationToken token = default)
+		{
+			if (IsFirstInstance)
+			{
+				throw new InvalidOperationException(@"This is the first instance.");
+			}
+
+			try
+			{
+				using var client = new NamedPipeClientStream(_identifier);
+				using var writer = new StreamWriter(client);
+
+				await client.ConnectAsync(200, token);
+
+				foreach (var argument in arguments)
+				{
+					await writer.WriteLineAsync(argument);
+				}
+
+				return true;
+			}
+			catch (TimeoutException)
+			{
+				//Couldn't connect to server
+			}
+			catch (IOException)
+			{
+				//Pipe was broken
+			}
+
+			return false;
+		}
+
 		/// <summary>
 		/// Listens for arguments being passed from successive instances of the application.
 		/// </summary>
@@ -98,7 +132,11 @@ namespace SingleInstance
 				var arguments = new List<string>();
 				while (server.IsConnected)
 				{
-					arguments.Add(reader.ReadLine());
+					var str = reader.ReadLine();
+					if (str != null)
+					{
+						arguments.Add(str);
+					}
 				}
 
 				ThreadPool.QueueUserWorkItem(OnArgumentsReceived, arguments.ToArray());
@@ -138,7 +176,7 @@ namespace SingleInstance
 
 				if (_mutex != null && _ownsMutex)
 				{
-					_mutex.ReleaseMutex();
+					_mutex.Dispose();
 					_mutex = null;
 				}
 

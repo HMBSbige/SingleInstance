@@ -7,7 +7,7 @@ NuGet.org | [![NuGet.org](https://img.shields.io/nuget/v/HMBSbige.SingleInstance
 
 # Example
 ```csharp
-var singleInstance = new SingleInstance(@"Global");
+var singleInstance = new SingleInstance(@"Global\SingleInstance");
 
 if (!singleInstance.IsFirstInstance)
 {
