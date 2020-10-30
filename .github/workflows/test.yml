@@ -1,0 +1,20 @@
+name: Unit testing
+on: [push, pull_request]
+
+jobs:
+
+  build:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        configuration : [Debug, Release]
+
+    steps:
+    - name: Check out
+      uses: actions/checkout@v2
+
+    - name: Test ${{ matrix.configuration }}
+      shell: pwsh
+      run: dotnet test --logger:"console;verbosity=detailed" -c ${{ matrix.configuration }} 
