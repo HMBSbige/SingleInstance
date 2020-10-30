@@ -8,13 +8,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        configuration : [Debug, Release]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
     - name: Check out
       uses: actions/checkout@v2
 
-    - name: Test ${{ matrix.configuration }}
+    - name: Test
       shell: pwsh
-      run: dotnet test --logger:"console;verbosity=detailed" -c ${{ matrix.configuration }} 
+      run: dotnet test --logger:"console;verbosity=detailed" -c Release
