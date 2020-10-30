@@ -8,7 +8,7 @@
     <RepositoryUrl>https://github.com/HMBSbige/SingleInstance</RepositoryUrl>
     <PackageProjectUrl>https://github.com/HMBSbige/SingleInstance</PackageProjectUrl>
     <PackageTags>SingleInstance</PackageTags>
-    <Version>1.0.3</Version>
+    <Version>1.1.0</Version>
     <Copyright>Copyright © HMBSbige 2020</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>HMBSbige.SingleInstance</PackageId>
