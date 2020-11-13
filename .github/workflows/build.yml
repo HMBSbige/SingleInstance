@@ -3,9 +3,12 @@ on: [push, pull_request]
 
 jobs:
 
-  test_linux:
-    name: Test on Linux
-    runs-on: ubuntu-latest
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
     - name: Checkout code
@@ -14,34 +17,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: '5.0.x'
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '3.1.x'
-
-    - name: Test .NET Core 3.1
-      shell: pwsh
-      run: dotnet test --logger:"console;verbosity=detailed" -c Release -f netcoreapp3.1
-
-    - name: Test .NET 5.0
-      shell: pwsh
-      run: dotnet test --logger:"console;verbosity=detailed" -c Release -f net5.0
-
-  test_windows:
-    name: Test on Windows
-    needs: test_linux
-    runs-on: windows-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '5.0.x'
+        dotnet-version: 5.0.x
 
     - name: Test
       shell: pwsh
@@ -49,7 +25,7 @@ jobs:
 
   build:
     name: Build
-    needs: test_windows
+    needs: test
     runs-on: ubuntu-latest
     env: 
       NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
@@ -63,11 +39,11 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: '5.0.x'
+        dotnet-version: 5.0.x
 
     - name: Build
       shell: pwsh
-      run: dotnet build -c Release ${{ env.ProjectName }}
+      run: dotnet build -c Release
 
     - name: Push nuget packages if a new tag is pushed
       if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
