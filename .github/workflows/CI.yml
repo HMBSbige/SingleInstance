@@ -42,7 +42,6 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     env: 
-      NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
       NuGetAPIKey: ${{ secrets.NuGetAPIKey }}
       ProjectName: SingleInstance
 
@@ -63,6 +62,5 @@ jobs:
       if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
       shell: pwsh
       run: |
-        dotnet nuget add source https://nuget.pkg.github.com/HMBSbige/index.json -n GitHub-HMBSbige -u HMBSbige -p ${{ secrets.NUGET_TOKEN }} --store-password-in-clear-text
-        dotnet nuget push ${{ env.ProjectName }}\bin\Release\*.nupkg -s GitHub-HMBSbige --skip-duplicate
+        dotnet nuget push ${{ env.ProjectName }}\bin\Release\*.nupkg -s https://nuget.pkg.github.com/HMBSbige -k ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
         dotnet nuget push ${{ env.ProjectName }}\bin\Release\*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NuGetAPIKey }} --skip-duplicate
