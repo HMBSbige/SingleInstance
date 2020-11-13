@@ -3,14 +3,12 @@ on: [push, pull_request]
 
 jobs:
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    env: 
-      NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
-      NuGetAPIKey: ${{ secrets.NuGetAPIKey }}
-      ProjectName: SingleInstance
-      DOTNET_SDK_VERSION: 5.0.x
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
     - name: Checkout code
@@ -19,7 +17,29 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+        dotnet-version: 5.0.x
+
+    - name: Test
+      shell: pwsh
+      run: dotnet test --logger:"console;verbosity=detailed" -c Release
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    env: 
+      NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
+      NuGetAPIKey: ${{ secrets.NuGetAPIKey }}
+      ProjectName: SingleInstance
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
 
     - name: Build
       shell: pwsh
