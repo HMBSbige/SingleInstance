@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
@@ -16,8 +16,11 @@ namespace SingleInstance
 		private readonly Mutex _mutex;
 		private readonly bool _ownsMutex;
 		private readonly string _identifier;
-		private volatile Task _server;
-		private readonly CancellationTokenSource _cts;
+		private volatile Task? _server;
+		private readonly CancellationTokenSource _cts = new();
+
+		private readonly Subject<string[]> _argumentsReceived = new();
+		public IObservable<string[]> ArgumentsReceived => _argumentsReceived;
 
 		/// <summary>
 		/// Enforces single instance for an application.
@@ -27,13 +30,11 @@ namespace SingleInstance
 		{
 			_identifier = identifier;
 
-			_mutex = new Mutex(true, identifier, out _ownsMutex);
+			_mutex = new(true, identifier, out _ownsMutex);
 			if (!_ownsMutex)
 			{
 				Dispose();
 			}
-
-			_cts = new CancellationTokenSource();
 		}
 
 		/// <summary>
@@ -97,6 +98,9 @@ namespace SingleInstance
 			{
 				try
 				{
+#if !NETSTANDARD
+					await
+#endif
 					using var server = new NamedPipeServerStream(_identifier, PipeDirection.In);
 					using var reader = new StreamReader(server);
 					await server.WaitForConnectionAsync(token);
@@ -124,43 +128,13 @@ namespace SingleInstance
 			}
 		}
 
-		private readonly Subject<string[]> _argumentsReceived = new Subject<string[]>();
-		public IObservable<string[]> ArgumentsReceived => _argumentsReceived;
-
 		#region IDisposable
-
-		private volatile bool _disposedValue;
-
-		private void Dispose(bool disposing)
-		{
-			if (_disposedValue)
-			{
-				return;
-			}
-
-			if (disposing)
-			{
-				// 释放托管状态(托管对象)
-
-				_cts?.Cancel();
-				_mutex?.Dispose();
-				_argumentsReceived.OnCompleted();
-			}
-
-			// 释放未托管的资源(未托管的对象)并替代终结器
-			// 将大型字段设置为 null
-			_disposedValue = true;
-		}
-
-		~SingleInstance()
-		{
-			Dispose(false);
-		}
 
 		public void Dispose()
 		{
-			Dispose(true);
-			GC.SuppressFinalize(this);
+			_cts.Cancel();
+			_mutex.Dispose();
+			_argumentsReceived.OnCompleted();
 		}
 
 		#endregion
