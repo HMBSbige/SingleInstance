@@ -41,8 +41,7 @@ jobs:
     name: Build
     needs: test
     runs-on: ubuntu-latest
-    env: 
-      NuGetAPIKey: ${{ secrets.NuGetAPIKey }}
+    env:
       ProjectName: SingleInstance
 
     steps:
