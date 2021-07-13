@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SingleInstance;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,10 +14,10 @@ namespace UnitTest
 		{
 			const string identifier = @"Global\SingleInstance.TestInstance";
 
-			using var singleInstance = new SingleInstance.SingleInstance(identifier);
+			using var singleInstance = new SingleInstanceService(identifier);
 			Assert.IsTrue(singleInstance.IsFirstInstance);
 
-			using var singleInstance2 = new SingleInstance.SingleInstance(identifier);
+			using var singleInstance2 = new SingleInstanceService(identifier);
 			Assert.IsFalse(singleInstance2.IsFirstInstance);
 		}
 
@@ -25,20 +26,20 @@ namespace UnitTest
 		{
 			const string identifier = @"Global\SingleInstance.TestDispose";
 
-			var singleInstance = new SingleInstance.SingleInstance(identifier);
+			var singleInstance = new SingleInstanceService(identifier);
 			Assert.IsTrue(singleInstance.IsFirstInstance);
 
-			var singleInstance2 = new SingleInstance.SingleInstance(identifier);
+			var singleInstance2 = new SingleInstanceService(identifier);
 			Assert.IsFalse(singleInstance2.IsFirstInstance);
 
 			singleInstance.Dispose();
 
-			singleInstance = new SingleInstance.SingleInstance(identifier);
+			singleInstance = new SingleInstanceService(identifier);
 			Assert.IsTrue(singleInstance.IsFirstInstance);
 
 			singleInstance2.Dispose();
 
-			singleInstance2 = new SingleInstance.SingleInstance(identifier);
+			singleInstance2 = new SingleInstanceService(identifier);
 			Assert.IsFalse(singleInstance2.IsFirstInstance);
 		}
 
@@ -50,7 +51,7 @@ namespace UnitTest
 			const string fail = @"fail";
 			var tcs = new TaskCompletionSource<bool>();
 
-			using var singleInstance = new SingleInstance.SingleInstance(identifier);
+			using var singleInstance = new SingleInstanceService(identifier);
 
 			singleInstance.ArgumentsReceived.Subscribe(args =>
 			{
@@ -65,7 +66,7 @@ namespace UnitTest
 			});
 			singleInstance.ListenForArgumentsFromSuccessiveInstances();
 
-			using var singleInstance2 = new SingleInstance.SingleInstance(identifier);
+			using var singleInstance2 = new SingleInstanceService(identifier);
 
 			Assert.IsTrue(singleInstance2.PassArgumentsToFirstInstance(new[] { success, fail }));
 

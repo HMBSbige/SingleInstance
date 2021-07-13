@@ -11,7 +11,7 @@ namespace SingleInstance
 	/// <summary>
 	/// Enforces single instance for an application.
 	/// </summary>
-	public sealed class SingleInstance : IDisposable
+	public sealed class SingleInstanceService : IDisposable
 	{
 		private readonly Mutex _mutex;
 		private readonly bool _ownsMutex;
@@ -26,7 +26,7 @@ namespace SingleInstance
 		/// Enforces single instance for an application.
 		/// </summary>
 		/// <param name="identifier">An identifier unique to this application.</param>
-		public SingleInstance(string identifier)
+		public SingleInstanceService(string identifier)
 		{
 			_identifier = identifier;
 
