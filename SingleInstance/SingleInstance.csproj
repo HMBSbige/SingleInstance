@@ -1,19 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="..\common.props" />
+  
   <PropertyGroup>
-    <TargetFrameworks>net5.0;netcoreapp3.1;netstandard2.0</TargetFrameworks>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <Authors>HMBSbige</Authors>
-    <Description>Enforces single instance for an application.</Description>
-    <RepositoryUrl>https://github.com/HMBSbige/SingleInstance</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/HMBSbige/SingleInstance</PackageProjectUrl>
-    <PackageTags>SingleInstance</PackageTags>
-    <Version>5.0.7</Version>
-    <Copyright>Copyright © 2020 - 2021 HMBSbige</Copyright>
+    <NoWarn>CS1591</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>HMBSbige.SingleInstance</PackageId>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>

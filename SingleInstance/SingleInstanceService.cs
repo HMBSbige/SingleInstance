@@ -30,7 +30,7 @@ namespace SingleInstance
 		{
 			_identifier = identifier;
 
-			_mutex = new(true, identifier, out _ownsMutex);
+			_mutex = new Mutex(true, identifier, out _ownsMutex);
 			if (!_ownsMutex)
 			{
 				Dispose();
