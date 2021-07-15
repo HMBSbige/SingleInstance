@@ -11,6 +11,5 @@
     <PackageProjectUrl>https://github.com/HMBSbige/SingleInstance</PackageProjectUrl>
     <Description>Enforces single instance for an application.</Description>
     <PackageTags>SingleInstance</PackageTags>
-    <PackageId>HMBSbige.SingleInstance</PackageId>
   </PropertyGroup>
 </Project>
