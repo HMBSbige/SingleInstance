@@ -1,140 +1,133 @@
+using Nerdbank.Streams;
 using System;
-using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics.CodeAnalysis;
+using System.IO.Pipelines;
 using System.IO.Pipes;
 using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
+using PipeOptions = System.IO.Pipes.PipeOptions;
 
 namespace SingleInstance
 {
-	/// <summary>
-	/// Enforces single instance for an application.
-	/// </summary>
-	public sealed class SingleInstanceService : IDisposable
+	public class SingleInstanceService : ISingleInstanceService
 	{
-		private readonly Mutex _mutex;
-		private readonly bool _ownsMutex;
-		private readonly string _identifier;
+		public string? Identifier { get; set; }
+
+		public bool IsFirstInstance => _ownsMutex;
+
+		private readonly Subject<IDuplexPipe> _connectionsReceived = new();
+		public IObservable<IDuplexPipe> ConnectionsReceived => _connectionsReceived;
+
+		private Mutex? _mutex;
+		private bool _ownsMutex;
 		private volatile Task? _server;
 		private readonly CancellationTokenSource _cts = new();
 
-		private readonly Subject<string[]> _argumentsReceived = new();
-		public IObservable<string[]> ArgumentsReceived => _argumentsReceived;
-
-		/// <summary>
-		/// Enforces single instance for an application.
-		/// </summary>
-		/// <param name="identifier">An identifier unique to this application.</param>
-		public SingleInstanceService(string identifier)
+		public bool TryStartSingleInstance()
 		{
-			_identifier = identifier;
+			CheckDispose();
 
-			_mutex = new Mutex(true, identifier, out _ownsMutex);
+			CheckIdentifierNotNull();
+
+			_mutex ??= new Mutex(true, Identifier, out _ownsMutex);
 			if (!_ownsMutex)
 			{
-				Dispose();
+				_mutex.Dispose();
 			}
+			return _ownsMutex;
 		}
 
-		/// <summary>
-		/// Indicates whether this is the first instance of this application.
-		/// </summary>
-		public bool IsFirstInstance => _ownsMutex;
-
-		/// <summary>
-		/// Passes the given arguments to the first running instance of the application.
-		/// </summary>
-		/// <param name="arguments">The arguments to pass.</param>
-		/// <returns>Return true if the operation succeeded, false otherwise.</returns>
-		public bool PassArgumentsToFirstInstance(IEnumerable<string> arguments)
+		public async ValueTask<IDuplexPipe> SendMessageToFirstInstanceAsync(ReadOnlyMemory<byte> buffer, CancellationToken token = default)
 		{
+			CheckDispose();
+
 			if (IsFirstInstance)
 			{
 				throw new InvalidOperationException(@"This is the first instance.");
 			}
 
-			try
-			{
-				using var client = new NamedPipeClientStream(@".", _identifier, PipeDirection.Out);
-				using var writer = new StreamWriter(client);
-				client.Connect(200);
+			CheckIdentifierNotNull();
 
-				foreach (var argument in arguments)
-				{
-					writer.WriteLine(argument);
-				}
+			var client = new NamedPipeClientStream(@".", Identifier, PipeDirection.InOut, PipeOptions.Asynchronous);
+			await client.ConnectAsync(200, token);
 
-				return true;
-			}
-			catch
-			{
-				return false;
-			}
+			var pipe = client.UsePipe(cancellationToken: token);
+
+			await pipe.Output.WriteAsync(buffer, token);
+
+			return pipe;
 		}
 
-		/// <summary>
-		/// Listens for arguments being passed from successive instances of the application.
-		/// </summary>
-		public void ListenForArgumentsFromSuccessiveInstances()
+		public void StartListenServer()
 		{
+			CheckDispose();
+
 			if (!IsFirstInstance)
 			{
 				throw new InvalidOperationException(@"This is not the first instance.");
 			}
 
-			if (_server == null)
+			if (_server is not null)
 			{
-				_server = ListenForArguments(_cts.Token);
+				throw new InvalidOperationException(@"Server already started!");
 			}
-		}
 
-		/// <summary>
-		/// Listens for arguments on a named pipe.
-		/// </summary>
-		private async Task ListenForArguments(CancellationToken token)
-		{
-			while (!token.IsCancellationRequested)
+			CheckIdentifierNotNull();
+			_server = ListenServerInternalAsync(Identifier, _cts.Token);
+
+			async Task ListenServerInternalAsync(string identifier, CancellationToken token)
 			{
-				try
+				while (!token.IsCancellationRequested)
 				{
-#if !NETSTANDARD
-					await
-#endif
-					using var server = new NamedPipeServerStream(_identifier, PipeDirection.In);
-					using var reader = new StreamReader(server);
-					await server.WaitForConnectionAsync(token);
-
-					var arguments = new List<string>();
-					while (server.IsConnected)
+					try
 					{
-						var str = await reader.ReadLineAsync();
-						if (str != null)
-						{
-							arguments.Add(str);
-						}
-						else
-						{
-							break;
-						}
-					}
+						var server = new NamedPipeServerStream(identifier, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+						await server.WaitForConnectionAsync(token);
 
-					_argumentsReceived.OnNext(arguments.ToArray());
-				}
-				catch
-				{
-					// ignored
+						var pipe = server.UsePipe(cancellationToken: token);
+
+						_connectionsReceived.OnNext(pipe);
+					}
+					catch
+					{
+						// ignored
+					}
 				}
 			}
 		}
 
-		#region IDisposable
+		[MemberNotNull(nameof(Identifier))]
+		private void CheckIdentifierNotNull()
+		{
+			if (Identifier is null)
+			{
+				throw new ArgumentNullException(nameof(Identifier));
+			}
+		}
 
+		#region Dispose
+
+		private void CheckDispose()
+		{
+			if (_isDispose)
+			{
+				throw new ObjectDisposedException(@"This instance has been disposed!");
+			}
+		}
+
+		private volatile bool _isDispose;
 		public void Dispose()
 		{
+			if (_isDispose)
+			{
+				return;
+			}
+			_isDispose = true;
+
 			_cts.Cancel();
-			_mutex.Dispose();
-			_argumentsReceived.OnCompleted();
+			_mutex?.Dispose();
+			_connectionsReceived.OnCompleted();
 		}
 
 		#endregion
