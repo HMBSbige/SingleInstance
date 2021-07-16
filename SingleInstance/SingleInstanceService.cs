@@ -123,7 +123,6 @@ namespace SingleInstance
 							}
 							finally
 							{
-
 								pipe.Output.Complete();
 							}
 						}

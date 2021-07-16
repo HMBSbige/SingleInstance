@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SingleInstance;
 using System;
 using System.Reactive;
+using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -18,7 +19,7 @@ namespace UnitTest
 		[TestMethod]
 		public void TestSingleInstance()
 		{
-			const string identifier = @"Global\SingleInstance.TestInstance";
+			const string identifier = @"Global\SingleInstance.Test1";
 
 			using var singleInstance = CreateNewInstance(identifier);
 			Assert.IsFalse(singleInstance.IsFirstInstance);
@@ -33,7 +34,7 @@ namespace UnitTest
 		[TestMethod]
 		public void TestDispose()
 		{
-			const string identifier = @"Global\SingleInstance.TestDispose";
+			const string identifier = @"Global\SingleInstance.Test";
 
 			var singleInstance = CreateNewInstance(identifier);
 			Assert.IsTrue(singleInstance.TryStartSingleInstance());
@@ -55,7 +56,7 @@ namespace UnitTest
 		[TestMethod]
 		public async Task TestSendMessageToFirstInstanceAsync()
 		{
-			const string identifier = @"SingleInstance.TestPassArgumentsAsync";
+			const string identifier = @"Global\SingleInstance.Test2";
 			const string clientSendStr = @"Hello!";
 			const string serverResponseStr = @"你好！";
 
@@ -70,7 +71,7 @@ namespace UnitTest
 			Assert.ThrowsException<InvalidOperationException>(() => server.StartListenServer());
 			Assert.ThrowsException<InvalidOperationException>(() => client.StartListenServer());
 
-			server.Received.SelectMany(ServerResponseAsync).Subscribe();
+			server.Received.ObserveOn(Scheduler.Default).SelectMany(ServerResponseAsync).Subscribe();
 
 			var clientReceive = await client.SendMessageToFirstInstanceAsync(clientSendStr);
 
@@ -92,24 +93,26 @@ namespace UnitTest
 		[TestMethod]
 		public void TestCheckIdentifier()
 		{
+			const string identifier = @"Global\SingleInstance.Test3";
+
 			Assert.ThrowsException<ArgumentNullException>(() => CreateNewInstance(null!));
 			Assert.ThrowsException<ArgumentException>(() => CreateNewInstance(@""));
 			Assert.ThrowsException<ArgumentOutOfRangeException>(() => CreateNewInstance(@"anonymous"));
 
 			if (OperatingSystem.IsWindows())
 			{
-				var s1 = CreateNewInstance(@"Global\TestCheckIdentifier.Test");
+				var s1 = CreateNewInstance(identifier);
 				Assert.IsTrue(s1.TryStartSingleInstance());
 				s1.StartListenServer();
-				CreateNewInstance(@"Global\TestCheckIdentifier.Test");
+				CreateNewInstance(identifier);
 			}
 			else if (OperatingSystem.IsLinux())
 			{
-				CreateNewInstance(@"Global\TestCheckIdentifier.Test");
+				CreateNewInstance(identifier);
 			}
 			else if (OperatingSystem.IsMacOS())
 			{
-				Assert.ThrowsException<PlatformNotSupportedException>(() => CreateNewInstance(@"Global\TestCheckIdentifier.Test"));
+				Assert.ThrowsException<ArgumentOutOfRangeException>(() => CreateNewInstance(@"Global\SingleInstance.TestPassArgumentsAsync"));
 			}
 		}
 	}
