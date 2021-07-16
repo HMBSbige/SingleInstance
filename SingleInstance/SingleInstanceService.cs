@@ -14,7 +14,7 @@ namespace SingleInstance
 {
 	public class SingleInstanceService : ISingleInstanceService
 	{
-		public string? Identifier { get; init; }
+		public string Identifier { get; }
 
 		public bool IsFirstInstance => _ownsMutex;
 
@@ -25,18 +25,17 @@ namespace SingleInstance
 		private bool _ownsMutex;
 		private volatile Task? _server;
 		private readonly CancellationTokenSource _cts = new();
-		private static ReadOnlySpan<byte> EndDelimiter => new[] { (byte)'\r', (byte)'\n' };
+		protected static ReadOnlySpan<byte> EndDelimiter => new[] { (byte)'\r', (byte)'\n' };
 
-		public SingleInstanceService(string identifier)
+		public SingleInstanceService([NotNull] string? identifier)
 		{
+			CheckIdentifierValid(identifier);
 			Identifier = identifier;
 		}
 
 		public bool TryStartSingleInstance()
 		{
 			CheckDispose();
-
-			CheckIdentifierNotNull();
 
 			_mutex ??= new Mutex(true, Identifier, out _ownsMutex);
 			if (!_ownsMutex)
@@ -54,8 +53,6 @@ namespace SingleInstance
 			{
 				throw new InvalidOperationException(@"This is the first instance.");
 			}
-
-			CheckIdentifierNotNull();
 
 			await using var client = new NamedPipeClientStream(@".", Identifier, PipeDirection.InOut, PipeOptions.Asynchronous);
 			await client.ConnectAsync(200, token);
@@ -93,7 +90,6 @@ namespace SingleInstance
 				throw new InvalidOperationException(@"Server already started!");
 			}
 
-			CheckIdentifierNotNull();
 			_server = ListenServerInternalAsync(Identifier, _cts.Token);
 
 			async Task ListenServerInternalAsync(string identifier, CancellationToken token)
@@ -192,12 +188,21 @@ namespace SingleInstance
 			return Encoding.UTF8.GetString(read);
 		}
 
-		[MemberNotNull(nameof(Identifier))]
-		private void CheckIdentifierNotNull()
+		private static void CheckIdentifierValid([NotNull] string? identifier)
 		{
-			if (Identifier is null)
+			if (identifier is null)
 			{
-				throw new ArgumentNullException(nameof(Identifier));
+				throw new ArgumentNullException(nameof(identifier));
+			}
+
+			using (new Mutex(false, identifier))
+			{
+
+			}
+
+			using (new NamedPipeClientStream(@".", identifier, PipeDirection.InOut, PipeOptions.Asynchronous))
+			{
+
 			}
 		}
 

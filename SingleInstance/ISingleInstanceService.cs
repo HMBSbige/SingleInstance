@@ -6,7 +6,7 @@ namespace SingleInstance
 {
 	public interface ISingleInstanceService : IDisposable
 	{
-		string? Identifier { get; }
+		string Identifier { get; }
 
 		bool IsFirstInstance { get; }
 

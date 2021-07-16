@@ -55,7 +55,7 @@ namespace UnitTest
 		[TestMethod]
 		public async Task TestSendMessageToFirstInstanceAsync()
 		{
-			const string identifier = @"Global\SingleInstance.TestPassArgumentsAsync";
+			const string identifier = @"SingleInstance.TestPassArgumentsAsync";
 			const string clientSendStr = @"Hello!";
 			const string serverResponseStr = @"你好！";
 
@@ -86,6 +86,30 @@ namespace UnitTest
 				endFunc(serverResponseStr);
 
 				return default;
+			}
+		}
+
+		[TestMethod]
+		public void TestCheckIdentifier()
+		{
+			Assert.ThrowsException<ArgumentNullException>(() => CreateNewInstance(null!));
+			Assert.ThrowsException<ArgumentException>(() => CreateNewInstance(@""));
+			Assert.ThrowsException<ArgumentOutOfRangeException>(() => CreateNewInstance(@"anonymous"));
+
+			if (OperatingSystem.IsWindows())
+			{
+				var s1 = CreateNewInstance(@"Global\TestCheckIdentifier.Test");
+				Assert.IsTrue(s1.TryStartSingleInstance());
+				s1.StartListenServer();
+				CreateNewInstance(@"Global\TestCheckIdentifier.Test");
+			}
+			else if (OperatingSystem.IsLinux())
+			{
+				CreateNewInstance(@"Global\TestCheckIdentifier.Test");
+			}
+			else if (OperatingSystem.IsMacOS())
+			{
+				Assert.ThrowsException<PlatformNotSupportedException>(() => CreateNewInstance(@"Global\TestCheckIdentifier.Test"));
 			}
 		}
 	}
