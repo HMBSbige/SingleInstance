@@ -2,6 +2,7 @@ using Nerdbank.Streams;
 using System;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.IO.Pipelines;
 using System.IO.Pipes;
 using System.Reactive.Subjects;
@@ -201,6 +202,18 @@ namespace SingleInstance
 			}
 
 			using (new NamedPipeClientStream(@".", identifier, PipeDirection.InOut, PipeOptions.Asynchronous))
+			{
+
+			}
+
+			try
+			{
+				using (new NamedPipeServerStream(identifier, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
+				{
+
+				}
+			}
+			catch (IOException)
 			{
 
 			}
