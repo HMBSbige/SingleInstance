@@ -1,10 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SingleInstance;
 using System;
-using System.IO.Pipelines;
 using System.Reactive;
 using System.Reactive.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace UnitTest
@@ -14,10 +12,7 @@ namespace UnitTest
 	{
 		private static ISingleInstanceService CreateNewInstance(string identifier)
 		{
-			return new SingleInstanceService
-			{
-				Identifier = identifier
-			};
+			return new SingleInstanceService(identifier);
 		}
 
 		[TestMethod]
@@ -75,27 +70,21 @@ namespace UnitTest
 			Assert.ThrowsException<InvalidOperationException>(() => server.StartListenServer());
 			Assert.ThrowsException<InvalidOperationException>(() => client.StartListenServer());
 
-			server.ConnectionsReceived.SelectMany(ServerResponseAsync).Subscribe();
+			server.Received.SelectMany(ServerResponseAsync).Subscribe();
 
-			var clientPipe = await client.SendMessageToFirstInstanceAsync(Encoding.UTF8.GetBytes(clientSendStr));
-			await clientPipe.Output.CompleteAsync();
+			var clientReceive = await client.SendMessageToFirstInstanceAsync(clientSendStr);
 
-			var clientResult = await clientPipe.Input.ReadAsync();
-			var response = Encoding.UTF8.GetString(clientResult.Buffer);
-			Assert.AreEqual(serverResponseStr, response);
-			await clientPipe.Input.CompleteAsync();
+			Assert.AreEqual(serverResponseStr, clientReceive);
 
-			static async Task<Unit> ServerResponseAsync(IDuplexPipe pipe)
+			static async Task<Unit> ServerResponseAsync((string, Action<string>) receive)
 			{
-				var result = await pipe.Input.ReadAsync();
-				var str = Encoding.UTF8.GetString(result.Buffer);
-				Assert.AreEqual(clientSendStr, str);
-				await pipe.Input.CompleteAsync();
+				var (message, endFunc) = receive;
+				Assert.AreEqual(clientSendStr, message);
 
 				await Task.Delay(TimeSpan.FromSeconds(3));
 
-				await pipe.Output.WriteAsync(Encoding.UTF8.GetBytes(serverResponseStr));
-				await pipe.Output.CompleteAsync();
+				endFunc(serverResponseStr);
+
 				return default;
 			}
 		}

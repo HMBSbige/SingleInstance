@@ -1,9 +1,11 @@
 using Nerdbank.Streams;
 using System;
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.IO.Pipes;
 using System.Reactive.Subjects;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using PipeOptions = System.IO.Pipes.PipeOptions;
@@ -12,17 +14,23 @@ namespace SingleInstance
 {
 	public class SingleInstanceService : ISingleInstanceService
 	{
-		public string? Identifier { get; set; }
+		public string? Identifier { get; init; }
 
 		public bool IsFirstInstance => _ownsMutex;
 
-		private readonly Subject<IDuplexPipe> _connectionsReceived = new();
-		public IObservable<IDuplexPipe> ConnectionsReceived => _connectionsReceived;
+		private readonly Subject<(string, Action<string>)> _received = new();
+		public IObservable<(string, Action<string>)> Received => _received;
 
 		private Mutex? _mutex;
 		private bool _ownsMutex;
 		private volatile Task? _server;
 		private readonly CancellationTokenSource _cts = new();
+		private static ReadOnlySpan<byte> EndDelimiter => new[] { (byte)'\r', (byte)'\n' };
+
+		public SingleInstanceService(string identifier)
+		{
+			Identifier = identifier;
+		}
 
 		public bool TryStartSingleInstance()
 		{
@@ -38,7 +46,7 @@ namespace SingleInstance
 			return _ownsMutex;
 		}
 
-		public async ValueTask<IDuplexPipe> SendMessageToFirstInstanceAsync(ReadOnlyMemory<byte> buffer, CancellationToken token = default)
+		public async ValueTask<string> SendMessageToFirstInstanceAsync(string message, CancellationToken token = default)
 		{
 			CheckDispose();
 
@@ -49,14 +57,26 @@ namespace SingleInstance
 
 			CheckIdentifierNotNull();
 
-			var client = new NamedPipeClientStream(@".", Identifier, PipeDirection.InOut, PipeOptions.Asynchronous);
+			await using var client = new NamedPipeClientStream(@".", Identifier, PipeDirection.InOut, PipeOptions.Asynchronous);
 			await client.ConnectAsync(200, token);
 
 			var pipe = client.UsePipe(cancellationToken: token);
 
-			await pipe.Output.WriteAsync(buffer, token);
+			// Send message
+			try
+			{
+				var length = Encoding.UTF8.GetBytes(message, pipe.Output.GetSpan(Encoding.UTF8.GetMaxByteCount(message.Length)));
+				pipe.Output.Advance(length);
 
-			return pipe;
+				EndDelimiter.CopyTo(pipe.Output.GetSpan(EndDelimiter.Length));
+				pipe.Output.Advance(EndDelimiter.Length);
+			}
+			finally
+			{
+				await pipe.Output.CompleteAsync();
+			}
+
+			return await ReadAsync(pipe.Input, token);
 		}
 
 		public void StartListenServer()
@@ -87,7 +107,31 @@ namespace SingleInstance
 
 						var pipe = server.UsePipe(cancellationToken: token);
 
-						_connectionsReceived.OnNext(pipe);
+						var receive = await ReadAsync(pipe.Input, token);
+
+						if (string.IsNullOrEmpty(receive))
+						{
+							continue;
+						}
+
+						void SendResponseAsync(string message)
+						{
+							try
+							{
+								var length = Encoding.UTF8.GetBytes(message, pipe.Output.GetSpan(Encoding.UTF8.GetMaxByteCount(message.Length)));
+								pipe.Output.Advance(length);
+
+								EndDelimiter.CopyTo(pipe.Output.GetSpan(EndDelimiter.Length));
+								pipe.Output.Advance(EndDelimiter.Length);
+							}
+							finally
+							{
+
+								pipe.Output.Complete();
+							}
+						}
+
+						_received.OnNext((receive, SendResponseAsync));
 					}
 					catch
 					{
@@ -95,6 +139,57 @@ namespace SingleInstance
 					}
 				}
 			}
+		}
+
+		private static async ValueTask<string> ReadAsync(PipeReader reader, CancellationToken token)
+		{
+			try
+			{
+				while (true)
+				{
+					token.ThrowIfCancellationRequested();
+
+					var result = await reader.ReadAsync(token);
+					var buffer = result.Buffer;
+					try
+					{
+						var response = HandleResponse(ref buffer);
+
+						if (response is not null)
+						{
+							return response;
+						}
+
+						if (result.IsCompleted)
+						{
+							break;
+						}
+					}
+					finally
+					{
+						reader.AdvanceTo(buffer.Start, buffer.End);
+					}
+				}
+			}
+			finally
+			{
+				await reader.CompleteAsync();
+			}
+
+			return string.Empty;
+		}
+
+		private static string? HandleResponse(ref ReadOnlySequence<byte> buffer)
+		{
+			var reader = new SequenceReader<byte>(buffer);
+
+			if (!reader.TryReadTo(out ReadOnlySequence<byte> read, EndDelimiter))
+			{
+				return default;
+			}
+
+			buffer = reader.UnreadSequence;
+			return Encoding.UTF8.GetString(read);
 		}
 
 		[MemberNotNull(nameof(Identifier))]
@@ -123,11 +218,13 @@ namespace SingleInstance
 			{
 				return;
 			}
-			_isDispose = true;
 
 			_cts.Cancel();
 			_mutex?.Dispose();
-			_connectionsReceived.OnCompleted();
+			_received.OnCompleted();
+
+			_isDispose = true;
+			GC.SuppressFinalize(this);
 		}
 
 		#endregion

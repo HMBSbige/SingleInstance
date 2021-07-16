@@ -1,5 +1,4 @@
 using System;
-using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -7,15 +6,15 @@ namespace SingleInstance
 {
 	public interface ISingleInstanceService : IDisposable
 	{
-		string? Identifier { get; set; }
+		string? Identifier { get; }
 
 		bool IsFirstInstance { get; }
 
-		IObservable<IDuplexPipe> ConnectionsReceived { get; }
+		IObservable<(string, Action<string>)> Received { get; }
 
 		bool TryStartSingleInstance();
 
-		ValueTask<IDuplexPipe> SendMessageToFirstInstanceAsync(ReadOnlyMemory<byte> buffer, CancellationToken token = default);
+		ValueTask<string> SendMessageToFirstInstanceAsync(string message, CancellationToken token = default);
 
 		void StartListenServer();
 	}
