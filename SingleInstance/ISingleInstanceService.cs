@@ -1,10 +1,11 @@
+using Microsoft;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace SingleInstance
 {
-	public interface ISingleInstanceService : IDisposable
+	public interface ISingleInstanceService : IDisposableObservable
 	{
 		string Identifier { get; }
 

@@ -1,7 +1,7 @@
-using Nerdbank.Streams;
+using Microsoft;
+using Pipelines.Extensions;
 using System;
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Pipelines;
 using System.IO.Pipes;
@@ -28,7 +28,10 @@ namespace SingleInstance
 		private readonly CancellationTokenSource _cts = new();
 		protected static ReadOnlySpan<byte> EndDelimiter => new[] { (byte)'\r', (byte)'\n' };
 
-		public SingleInstanceService([NotNull] string? identifier)
+		private static readonly StreamPipeReaderOptions LeaveOpenReaderOptions = new(leaveOpen: true);
+		private static readonly StreamPipeWriterOptions LeaveOpenWriterOptions = new(leaveOpen: true);
+
+		public SingleInstanceService(string identifier)
 		{
 			CheckIdentifierValid(identifier);
 			Identifier = identifier;
@@ -50,15 +53,12 @@ namespace SingleInstance
 		{
 			CheckDispose();
 
-			if (IsFirstInstance)
-			{
-				throw new InvalidOperationException(@"This is the first instance.");
-			}
+			Verify.Operation(!IsFirstInstance, @"This is the first instance.");
 
 			await using var client = new NamedPipeClientStream(@".", Identifier, PipeDirection.InOut, PipeOptions.Asynchronous);
 			await client.ConnectAsync(200, token);
 
-			var pipe = client.UsePipe(cancellationToken: token);
+			var pipe = client.AsDuplexPipe(writerOptions: LeaveOpenWriterOptions);
 
 			// Send message
 			try
@@ -81,15 +81,8 @@ namespace SingleInstance
 		{
 			CheckDispose();
 
-			if (!IsFirstInstance)
-			{
-				throw new InvalidOperationException(@"This is not the first instance.");
-			}
-
-			if (_server is not null)
-			{
-				throw new InvalidOperationException(@"Server already started!");
-			}
+			Verify.Operation(IsFirstInstance, @"This is not the first instance.");
+			Verify.Operation(_server is null, @"Server already started!");
 
 			_server = ListenServerInternalAsync(Identifier, _cts.Token);
 
@@ -102,7 +95,7 @@ namespace SingleInstance
 						var server = new NamedPipeServerStream(identifier, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 						await server.WaitForConnectionAsync(token);
 
-						var pipe = server.UsePipe(cancellationToken: token);
+						var pipe = server.AsDuplexPipe(LeaveOpenReaderOptions);
 
 						var receive = await ReadAsync(pipe.Input, token);
 
@@ -188,12 +181,9 @@ namespace SingleInstance
 			return Encoding.UTF8.GetString(read);
 		}
 
-		private static void CheckIdentifierValid([NotNull] string? identifier)
+		private static void CheckIdentifierValid(string identifier)
 		{
-			if (identifier is null)
-			{
-				throw new ArgumentNullException(nameof(identifier));
-			}
+			Requires.NotNull(identifier, nameof(identifier));
 
 			using (new Mutex(false, identifier))
 			{
@@ -222,16 +212,14 @@ namespace SingleInstance
 
 		private void CheckDispose()
 		{
-			if (_isDispose)
-			{
-				throw new ObjectDisposedException(@"This instance has been disposed!");
-			}
+			Verify.NotDisposed(this, @"This instance has been disposed!");
 		}
 
-		private volatile bool _isDispose;
+		public bool IsDisposed { get; private set; }
+
 		public void Dispose()
 		{
-			if (_isDispose)
+			if (IsDisposed)
 			{
 				return;
 			}
@@ -240,7 +228,7 @@ namespace SingleInstance
 			_mutex?.Dispose();
 			_received.OnCompleted();
 
-			_isDispose = true;
+			IsDisposed = true;
 			GC.SuppressFinalize(this);
 		}
 
