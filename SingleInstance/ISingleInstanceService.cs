@@ -1,22 +1,18 @@
 using Microsoft;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace SingleInstance
+namespace SingleInstance;
+
+public interface ISingleInstanceService : IDisposableObservable
 {
-	public interface ISingleInstanceService : IDisposableObservable
-	{
-		string Identifier { get; }
+	string Identifier { get; }
 
-		bool IsFirstInstance { get; }
+	bool IsFirstInstance { get; }
 
-		IObservable<(string, Action<string>)> Received { get; }
+	IObservable<(string, Action<string>)> Received { get; }
 
-		bool TryStartSingleInstance();
+	bool TryStartSingleInstance();
 
-		ValueTask<string> SendMessageToFirstInstanceAsync(string message, CancellationToken token = default);
+	ValueTask<string> SendMessageToFirstInstanceAsync(string message, CancellationToken token = default);
 
-		void StartListenServer();
-	}
+	void StartListenServer();
 }
