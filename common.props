@@ -3,7 +3,7 @@
     <TargetFrameworks>net6.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>6.0.0</Version>
+    <Version>6.0.1-rc.1</Version>
     <Nullable>enable</Nullable>
     <Authors>HMBSbige</Authors>
     <Copyright>Copyright © 2020 - 2021 HMBSbige</Copyright>
