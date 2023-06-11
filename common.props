@@ -3,10 +3,10 @@
     <TargetFrameworks>net6.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>6.0.1-rc.1</Version>
+    <Version>6.0.1</Version>
     <Nullable>enable</Nullable>
     <Authors>HMBSbige</Authors>
-    <Copyright>Copyright © 2020 - 2021 HMBSbige</Copyright>
+    <Copyright>Copyright © 2020 - 2023 HMBSbige</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/HMBSbige/SingleInstance</RepositoryUrl>
     <PackageProjectUrl>https://github.com/HMBSbige/SingleInstance</PackageProjectUrl>
