@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>6.0.1</Version>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <Authors>HMBSbige</Authors>
+    <Copyright>Copyright © HMBSbige</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/HMBSbige/SingleInstance</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/HMBSbige/SingleInstance</PackageProjectUrl>
+    <Description>Enforces single instance for an application.</Description>
+    <PackageTags>SingleInstance</PackageTags>
+  </PropertyGroup>
+</Project>

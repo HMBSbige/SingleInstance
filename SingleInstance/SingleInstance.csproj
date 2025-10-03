@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\common.props" />
-  
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <NoWarn>CS1591</NoWarn>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -10,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Pipelines.Extensions" Version="1.0.2" />
-    <PackageReference Include="System.Reactive" Version="6.0.2" />
+    <PackageReference Include="Pipelines.Extensions" />
+    <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
 </Project>

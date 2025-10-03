@@ -1,4 +1,3 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SingleInstance;
 using System.Reactive;
 using System.Reactive.Concurrency;
@@ -66,8 +65,8 @@ public class UnitTest
 
 		server.StartListenServer();
 
-		Assert.ThrowsException<InvalidOperationException>(() => server.StartListenServer());
-		Assert.ThrowsException<InvalidOperationException>(() => client.StartListenServer());
+		Assert.ThrowsExactly<InvalidOperationException>(() => server.StartListenServer());
+		Assert.ThrowsExactly<InvalidOperationException>(() => client.StartListenServer());
 
 		server.Received.ObserveOn(Scheduler.Default).SelectMany(ServerResponseAsync).Subscribe();
 
@@ -93,9 +92,9 @@ public class UnitTest
 	{
 		const string identifier = @"Global\SingleInstance.Test3";
 
-		Assert.ThrowsException<ArgumentNullException>(() => CreateNewInstance(null!));
-		Assert.ThrowsException<ArgumentException>(() => CreateNewInstance(@""));
-		Assert.ThrowsException<ArgumentOutOfRangeException>(() => CreateNewInstance(@"anonymous"));
+		Assert.ThrowsExactly<ArgumentNullException>(() => CreateNewInstance(null!));
+		Assert.ThrowsExactly<ArgumentException>(() => CreateNewInstance(@""));
+		Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => CreateNewInstance(@"anonymous"));
 
 		if (OperatingSystem.IsWindows())
 		{
@@ -110,7 +109,7 @@ public class UnitTest
 		}
 		else if (OperatingSystem.IsMacOS())
 		{
-			Assert.ThrowsException<ArgumentOutOfRangeException>(() => CreateNewInstance(@"Global\SingleInstance.TestPassArgumentsAsync"));
+			Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => CreateNewInstance(@"Global\SingleInstance.TestPassArgumentsAsync"));
 		}
 	}
 }
