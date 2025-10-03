@@ -8,6 +8,6 @@
     <PackageVersion Include="MSTest.TestAdapter" Version="3.11.0" />
     <PackageVersion Include="MSTest.TestFramework" Version="3.11.0" />
     <PackageVersion Include="Pipelines.Extensions" Version="1.0.2" />
-    <PackageVersion Include="System.Reactive" Version="6.0.2" />
+    <PackageVersion Include="System.Reactive" Version="6.1.0" />
   </ItemGroup>
 </Project>
