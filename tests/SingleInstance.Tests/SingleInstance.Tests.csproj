@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="TUnit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/SingleInstance/SingleInstance.csproj" />
+    <ProjectReference Include="../SingleInstance.TestApp/SingleInstance.TestApp.csproj" />
+  </ItemGroup>
+
+</Project>

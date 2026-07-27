@@ -1,15 +1,24 @@
 ﻿<Solution>
+  <Folder Name="/CI/">
+    <File Path=".github/workflows/CI.yml" />
+    <File Path=".github/workflows/release.yml" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
     <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
     <File Path="LICENSE" />
     <File Path="NuGet.Config" />
     <File Path="README.md" />
-    <File Path=".github\renovate.json" />
-    <File Path=".github\workflows\CI.yml" />
-    <File Path="Directory.Packages.props" />
+    <File Path=".github/renovate.json" />
   </Folder>
-  <Project Path="SingleInstance\SingleInstance.csproj" />
-  <Project Path="UnitTest\UnitTest.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/SingleInstance/SingleInstance.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SingleInstance.TestApp/SingleInstance.TestApp.csproj" />
+    <Project Path="tests/SingleInstance.Tests/SingleInstance.Tests.csproj" />
+  </Folder>
 </Solution>

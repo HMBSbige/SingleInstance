@@ -1,18 +1,19 @@
 {
-	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"assignees": [
-		"HMBSbige"
-	],
-	"dependencyDashboard": false,
-	"extends": [
-		"config:recommended",
-		":configMigration",
-		":automergeBranch",
-		":automergeDigest",
-		":automergeMinor",
-		":disableRateLimiting"
-	],
-	"labels": [
-		"Automatic"
-	]
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "assignees": [
+    "HMBSbige"
+  ],
+  "extends": [
+    "config:recommended",
+    ":configMigration",
+    ":automergeBranch",
+    ":automergeDigest",
+    ":automergeMinor"
+  ],
+  "schedule": [
+    "* 0-3 8-14 * 3"
+  ],
+  "labels": [
+    "Automatic"
+  ]
 }

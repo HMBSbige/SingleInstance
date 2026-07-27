@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>HMBSbige.SingleInstance</PackageId>
+    <Description>Enforces a single application instance and lets later instances send integer command notifications.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>single-instance;named-pipes;command-notification</PackageTags>
+    <Copyright>Copyright © HMBSbige</Copyright>
+    <PackageProjectUrl>https://github.com/HMBSbige/SingleInstance</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/HMBSbige/SingleInstance</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>
