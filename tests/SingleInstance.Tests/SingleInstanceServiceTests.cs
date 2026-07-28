@@ -379,8 +379,15 @@ public class SingleInstanceServiceTests
 		}
 
 		// "." passes client-side pipe name validation but cannot be used as a server pipe name on Windows.
+		// The native name-validation error maps to either exception type depending on the Windows/runtime version.
 		using SingleInstanceService service = CreateService(@".");
-		await Assert.That(() => service.StartListening(static _ => { })).Throws<UnauthorizedAccessException>();
+		await Assert.That
+		(
+			() => service.StartListening(static _ => { })
+		).Throws<Exception>().And.Satisfies
+		(
+			static exception => exception is IOException or UnauthorizedAccessException
+		);
 	}
 
 	[Test]
