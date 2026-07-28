@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>HMBSbige.SingleInstance</PackageId>
     <Description>Enforces a single application instance and lets later instances send integer command notifications.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -14,6 +15,10 @@
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SingleInstance.Tests" />
   </ItemGroup>
 
 </Project>

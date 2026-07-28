@@ -52,21 +52,12 @@ public class SingleInstanceServiceTests
 	}
 
 	[Test]
-	[SuppressMessage("ReSharper", "AccessToDisposedClosure", Justification = "The server is disposed before the captured synchronization primitive leaves scope.")]
 	public async Task SendMessageAsync_DoesNotWaitForHandlerCompletion(CancellationToken cancellationToken)
 	{
 		string identifier = CreateIdentifier();
 		using ManualResetEventSlim handlerCanReturn = new(false);
-		TaskCompletionSource handlerStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		using SingleInstanceService server = CreateService(identifier);
-		server.StartListening
-		(
-			_ =>
-			{
-				handlerStarted.TrySetResult();
-				handlerCanReturn.Wait(cancellationToken);
-			}
-		);
+		Task handlerStarted = StartBlockingHandler(server, handlerCanReturn, cancellationToken);
 		using SingleInstanceService client = CreateService(identifier);
 
 		Task sendTask = client.SendMessageAsync(1, cancellationToken);
@@ -74,7 +65,7 @@ public class SingleInstanceServiceTests
 
 		try
 		{
-			await handlerStarted.Task.WaitAsync(cancellationToken);
+			await handlerStarted.WaitAsync(cancellationToken);
 			Task completed = await Task.WhenAny(sendTask, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken));
 			completedBeforeHandlerReturned = ReferenceEquals(completed, sendTask);
 		}
@@ -127,7 +118,7 @@ public class SingleInstanceServiceTests
 
 		using SingleInstanceService owner = CreateService(identifier);
 		using SingleInstanceService client = CreateService(identifier);
-		await using NamedPipeServerStream rawServer = new(identifier, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+		using NamedPipeServerStream rawServer = new(identifier, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 		Task connection = rawServer.WaitForConnectionAsync(cancellationToken);
 
 		Task sendTask = client.SendMessageAsync(command, cancellationToken);
@@ -205,7 +196,7 @@ public class SingleInstanceServiceTests
 		using SingleInstanceService server = CreateService(identifier);
 		server.StartListening(_ => Interlocked.Increment(ref handlerCalls));
 
-		await using (NamedPipeClientStream rawClient = new(@".", identifier, PipeDirection.Out, PipeOptions.Asynchronous))
+		using (NamedPipeClientStream rawClient = new(@".", identifier, PipeDirection.Out, PipeOptions.Asynchronous))
 		{
 			await rawClient.ConnectAsync(cancellationToken);
 			await rawClient.WriteAsync(new byte[] { 0x00, 0x01 }, cancellationToken);
@@ -221,25 +212,16 @@ public class SingleInstanceServiceTests
 	}
 
 	[Test]
-	[SuppressMessage("ReSharper", "AccessToDisposedClosure", Justification = "The server waits for the handler before the captured synchronization primitive leaves scope.")]
 	public async Task Dispose_WaitsForActiveHandlerBeforeReleasingInstanceMarker(CancellationToken cancellationToken)
 	{
 		string identifier = CreateIdentifier();
 		using ManualResetEventSlim handlerCanReturn = new(false);
-		TaskCompletionSource handlerStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		using SingleInstanceService server = CreateService(identifier);
-		server.StartListening
-		(
-			_ =>
-			{
-				handlerStarted.TrySetResult();
-				handlerCanReturn.Wait(cancellationToken);
-			}
-		);
+		Task handlerStarted = StartBlockingHandler(server, handlerCanReturn, cancellationToken);
 		using SingleInstanceService client = CreateService(identifier);
 
 		Task sendTask = client.SendMessageAsync(1, cancellationToken);
-		await handlerStarted.Task.WaitAsync(cancellationToken);
+		await handlerStarted.WaitAsync(cancellationToken);
 		Task disposeTask = Task.Run(server.Dispose, CancellationToken.None);
 		await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
 		bool disposeCompletedEarly = disposeTask.IsCompleted;
@@ -378,9 +360,192 @@ public class SingleInstanceServiceTests
 		await Assert.That(await commandReceived.Task.WaitAsync(cancellationToken)).IsEqualTo(command);
 	}
 
+	// The trailing CancellationToken parameters are mandated by the class-level TimeoutAttribute (TUnit0015) even when unused.
+	[Test]
+	[SuppressMessage("ReSharper", "AccessToDisposedClosure", Justification = "The awaited TUnit Throws assertion invokes the delegate before the service leaves its using scope.")]
+	public async Task StartListening_RejectsNullHandler(CancellationToken cancellationToken)
+	{
+		using SingleInstanceService service = CreateService(CreateIdentifier());
+		await Assert.That(() => service.StartListening(null!)).Throws<ArgumentNullException>();
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "AccessToDisposedClosure", Justification = "The awaited TUnit Throws assertion invokes the delegate before the service leaves its using scope.")]
+	public async Task StartListening_SurfacesUnusableIdentifier(CancellationToken cancellationToken)
+	{
+		if (!OperatingSystem.IsWindows())
+		{
+			return;
+		}
+
+		// "." passes client-side pipe name validation but cannot be used as a server pipe name on Windows.
+		using SingleInstanceService service = CreateService(@".");
+		await Assert.That(() => service.StartListening(static _ => { })).Throws<UnauthorizedAccessException>();
+	}
+
+	[Test]
+	public async Task StartListening_ContinuesAfterStalledClient(CancellationToken cancellationToken)
+	{
+		const int command = 7;
+		string identifier = CreateIdentifier();
+		TaskCompletionSource<int> commandReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+		using SingleInstanceService server = CreateService(identifier);
+		server.StartListening(received => commandReceived.TrySetResult(received));
+
+		// Connect and send a truncated command without ever disconnecting, then verify a real client still gets through.
+		using NamedPipeClientStream stalledClient = new(@".", identifier, PipeDirection.Out, PipeOptions.Asynchronous);
+		await stalledClient.ConnectAsync(cancellationToken);
+		await stalledClient.WriteAsync(new byte[] { 0x00 }, cancellationToken);
+		await stalledClient.FlushAsync(cancellationToken);
+
+		using SingleInstanceService client = CreateService(identifier);
+		await client.SendMessageAsync(command, cancellationToken);
+		await Assert.That(await commandReceived.Task.WaitAsync(cancellationToken)).IsEqualTo(command);
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "DisposeOnUsingVariable", Justification = "This test intentionally disposes the service before the end of the scope to verify idempotency and ownership release.")]
+	[SuppressMessage("ReSharper", "AccessToDisposedClosure", Justification = "This test intentionally invokes operations on a disposed service to verify ObjectDisposedException.")]
+	public async Task DisposeAsync_ReleasesOwnershipAndRejectsFurtherOperations(CancellationToken cancellationToken)
+	{
+		string identifier = CreateIdentifier();
+		await using SingleInstanceService service = CreateService(identifier);
+		service.StartListening(static _ => { });
+
+		await service.DisposeAsync();
+		await service.DisposeAsync();
+
+		await Assert.That(() => service.StartListening(static _ => { })).Throws<ObjectDisposedException>();
+		await Assert.That(async () => await service.SendMessageAsync(1, cancellationToken)).Throws<ObjectDisposedException>();
+		using SingleInstanceService replacement = CreateService(identifier);
+		await Assert.That(replacement.IsFirstInstance).IsTrue();
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "DisposeOnUsingVariable", Justification = "This test intentionally disposes the server before the end of the scope to verify non-blocking disposal.")]
+	public async Task DisposeAsync_DoesNotBlockButWaitsForActiveHandler(CancellationToken cancellationToken)
+	{
+		string identifier = CreateIdentifier();
+		using ManualResetEventSlim handlerCanReturn = new(false);
+		await using SingleInstanceService server = CreateService(identifier);
+		Task handlerStarted = StartBlockingHandler(server, handlerCanReturn, cancellationToken);
+		using SingleInstanceService client = CreateService(identifier);
+
+		Task sendTask;
+		Task disposeTask;
+		bool disposeCompletedEarly;
+
+		try
+		{
+			sendTask = client.SendMessageAsync(1, cancellationToken);
+			await handlerStarted.WaitAsync(cancellationToken);
+
+			// DisposeAsync must return its ValueTask without blocking the calling thread even while a handler is running.
+			disposeTask = server.DisposeAsync().AsTask();
+			await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+			disposeCompletedEarly = disposeTask.IsCompleted;
+		}
+		finally
+		{
+			handlerCanReturn.Set();
+		}
+
+		await sendTask;
+		await disposeTask.WaitAsync(cancellationToken);
+
+		using SingleInstanceService replacement = CreateService(identifier);
+		await Assert.That(disposeCompletedEarly).IsFalse();
+		await Assert.That(replacement.IsFirstInstance).IsTrue();
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "DisposeOnUsingVariable", Justification = "This test intentionally disposes the server before the end of the scope to assert ListenerCompletion; the using declaration provides failure-path cleanup and repeated disposal is idempotent.")]
+	public async Task ListenerCompletion_TracksListenerLifecycle(CancellationToken cancellationToken)
+	{
+		string identifier = CreateIdentifier();
+		using SingleInstanceService server = CreateService(identifier);
+		await Assert.That(server.ListenerCompletion.IsCompleted).IsTrue();
+
+		server.StartListening(static _ => { });
+		await Assert.That(server.ListenerCompletion.IsCompleted).IsFalse();
+
+		server.Dispose();
+		await Assert.That(server.ListenerCompletion.IsCompletedSuccessfully).IsTrue();
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "DisposeOnUsingVariable", Justification = "Each iteration intentionally disposes the server before asserting ListenerCompletion; the using declaration provides failure-path cleanup and repeated disposal is idempotent.")]
+	public async Task Dispose_RacingClientDisconnect_CompletesListenerSuccessfully(CancellationToken cancellationToken)
+	{
+		// Regression: a truncated client disconnect racing with disposal used to fault ListenerCompletion
+		// with EndOfStreamException instead of completing it successfully.
+		for (int iteration = 0; iteration < 10; ++iteration)
+		{
+			string identifier = CreateIdentifier();
+			using SingleInstanceService server = CreateService(identifier);
+			server.StartListening(static _ => { });
+
+			await SendRawBytesAsync(identifier, new byte[] { 0x00 }, cancellationToken);
+
+			server.Dispose();
+			await Assert.That(server.ListenerCompletion.IsCompletedSuccessfully).IsTrue();
+		}
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "AccessToDisposedClosure", Justification = "The awaited TUnit Throws assertion invokes and awaits the delegate before the client leaves its using scope.")]
+	public async Task SendMessageAsync_ThrowsTimeoutWhenFirstInstanceNeverListens(CancellationToken cancellationToken)
+	{
+		string identifier = CreateIdentifier();
+		using SingleInstanceService owner = CreateService(identifier);
+		using SingleInstanceService client = new(identifier) { ConnectTimeout = TimeSpan.FromMilliseconds(250) };
+
+		await Assert.That(async () => await client.SendMessageAsync(1, cancellationToken)).Throws<TimeoutException>();
+
+		// The ten-second default is a documented contract (README); pin the value so changing it forces a doc update.
+		using SingleInstanceService defaultClient = CreateService(identifier);
+		await Assert.That(defaultClient.ConnectTimeout).IsEqualTo(TimeSpan.FromSeconds(10));
+	}
+
+	[Test]
+	[SuppressMessage("ReSharper", "DisposeOnUsingVariable", Justification = "This test intentionally disposes the client to cancel the pending send; the using declaration provides failure-path cleanup and repeated disposal is idempotent.")]
+	public async Task Dispose_CancelsPendingSend(CancellationToken cancellationToken)
+	{
+		string identifier = CreateIdentifier();
+		using SingleInstanceService owner = CreateService(identifier);
+		using SingleInstanceService client = CreateService(identifier);
+
+		// The owner never listens, so the send waits in ConnectAsync (bounded by the default connect timeout) until the client is disposed.
+		Task sendTask = client.SendMessageAsync(1, cancellationToken);
+		client.Dispose();
+
+		await Assert.That(async () => await sendTask.WaitAsync(cancellationToken)).Throws<OperationCanceledException>();
+	}
+
 	private static SingleInstanceService CreateService(string identifier)
 	{
 		return new SingleInstanceService(identifier);
+	}
+
+	private static Task StartBlockingHandler
+	(
+		SingleInstanceService server,
+		ManualResetEventSlim handlerCanReturn,
+		CancellationToken cancellationToken
+	)
+	{
+		TaskCompletionSource handlerStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		server.StartListening
+		(
+			_ =>
+			{
+				handlerStarted.TrySetResult();
+				handlerCanReturn.Wait(cancellationToken);
+			}
+		);
+
+		return handlerStarted.Task;
 	}
 
 	private static async Task SendRawBytesAsync
@@ -390,7 +555,7 @@ public class SingleInstanceServiceTests
 		CancellationToken cancellationToken
 	)
 	{
-		await using NamedPipeClientStream client = new(@".", identifier, PipeDirection.Out, PipeOptions.Asynchronous);
+		using NamedPipeClientStream client = new(@".", identifier, PipeDirection.Out, PipeOptions.Asynchronous);
 		await client.ConnectAsync(cancellationToken);
 		await client.WriteAsync(message, cancellationToken);
 		await client.FlushAsync(cancellationToken);
@@ -398,7 +563,9 @@ public class SingleInstanceServiceTests
 
 	private static string CreateIdentifier()
 	{
-		return $"SingleInstance.Tests.{Guid.NewGuid():N}";
+		// Keep identifiers short: on macOS the pipe path (TMPDIR + "CoreFxPipe_" + name + NUL) must fit sun_path's 104 bytes,
+		// and 16 hex characters leave headroom for long custom TMPDIR values while staying collision-safe for tests.
+		return Guid.NewGuid().ToString(@"N")[..16];
 	}
 
 	private static CancellationTokenSource CreateTimeout(CancellationToken cancellationToken)

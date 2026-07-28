@@ -9,7 +9,7 @@ A .NET 10 library that elects one application instance and lets later instances 
 ```csharp
 using SingleInstance;
 
-using SingleInstanceService instance = new("MyApplication");
+await using SingleInstanceService instance = new("MyApplication");
 
 if (!instance.IsFirstInstance)
 {
@@ -18,6 +18,9 @@ if (!instance.IsFirstInstance)
 }
 
 instance.StartListening(static command => HandleCommand((AppCommand)command));
+
+// Continue into the application's normal run loop.
+// Observe instance.ListenerCompletion to detect listener failures.
 
 static void HandleCommand(AppCommand command)
 {
@@ -30,6 +33,14 @@ enum AppCommand
 	ShowMainWindow = 2,
 }
 ```
+
+## Notes
+
+- Use the same short, preferably ASCII, identifier in every instance; do not vary its casing or namespace prefix. Long identifiers can exceed Unix socket-path limits.
+- The message handler must be synchronous. Do not pass an async lambda; synchronous handler exceptions are ignored, so catch and log them inside the handler.
+- `StartListening` reports initial setup failures directly; observe `ListenerCompletion` for failures after startup.
+- `SendMessageAsync` throws `TimeoutException` if it cannot connect within 10 seconds; use a `CancellationToken` for an earlier deadline.
+- In UI applications, prefer `await using`. Synchronous `Dispose()` waits for the listener and active handler and can deadlock if the handler depends on the disposing thread.
 
 ## License
 
